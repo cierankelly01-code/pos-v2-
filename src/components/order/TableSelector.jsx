@@ -50,9 +50,8 @@ export default function TableSelector({ onSelect }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('table_number')
         .eq('tab_closed', false)
-        .order('created_at', { ascending: false })
         .limit(200);
       if (error) throw error;
       return data;

@@ -1,14 +1,51 @@
 import { useMemo, useState } from 'react';
 import { format, startOfWeek, endOfWeek, startOfToday } from 'date-fns';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 import { TrendingUp, Hash, Table2, ShoppingBag, ShieldCheck, Leaf, Coins } from 'lucide-react';
 import { TipsLeaderboard } from '@/components/admin/EndOfNightSummary';
+
+const PAGE_SIZE = 50;
 
 export default function OrdersOverview({ todayOrders, weekOrders, tips = [] }) {
   const [view, setView] = useState('today');
 
-  const orders = view === 'today' ? todayOrders : weekOrders;
-  const completedOrders = orders.filter(o => o.status === 'complete');
-  const pendingOrders = orders.filter(o => o.status === 'pending');
+  const statsOrders = view === 'today' ? todayOrders : weekOrders;
+  const completedOrders = statsOrders.filter(o => o.status === 'complete');
+  const pendingOrders = statsOrders.filter(o => o.status === 'pending');
+
+  const fromDate = useMemo(
+    () => (view === 'today'
+      ? startOfToday().toISOString()
+      : startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()),
+    [view]
+  );
+
+  const {
+    data: listPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['admin-orders', 'list', view],
+    queryFn: async ({ pageParam = 0 }) => {
+      const from = pageParam * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .gte('created_at', fromDate)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (error) throw error;
+      return data;
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === PAGE_SIZE ? pages.length : undefined,
+  });
+
+  const listOrders = listPages?.pages.flat() ?? [];
 
   const revenue = completedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
 
@@ -79,74 +116,67 @@ export default function OrdersOverview({ todayOrders, weekOrders, tips = [] }) {
         </p>
       )}
 
-      {/* Revenue / Tips / Combined */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-emerald-900/30 border border-emerald-700/30 rounded-xl p-3">
-          <div className="flex items-center gap-1 mb-1">
-            <TrendingUp className="w-3 h-3 text-emerald-400" />
-            <p className="font-body text-xs text-emerald-400 uppercase tracking-wider">Revenue</p>
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-zinc-800 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <span className="font-body text-xs text-zinc-500 uppercase">Revenue</span>
           </div>
           <p className="font-heading text-2xl text-emerald-400">£{revenue.toFixed(2)}</p>
         </div>
-        <div className="bg-amber-900/30 border border-amber-700/30 rounded-xl p-3">
-          <div className="flex items-center gap-1 mb-1">
-            <Coins className="w-3 h-3 text-amber-400" />
-            <p className="font-body text-xs text-amber-400 uppercase tracking-wider">Tips</p>
+        <div className="bg-zinc-800 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Coins className="w-4 h-4 text-amber-400" />
+            <span className="font-body text-xs text-zinc-500 uppercase">Tips</span>
           </div>
           <p className="font-heading text-2xl text-amber-400">£{tipsTotal.toFixed(2)}</p>
         </div>
-        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3">
-          <p className="font-body text-xs text-zinc-400 uppercase tracking-wider mb-1">Combined</p>
-          <p className="font-heading text-2xl text-zinc-100">£{combinedTotal.toFixed(2)}</p>
+        <div className="bg-zinc-800 rounded-xl p-4 col-span-2">
+          <span className="font-body text-xs text-zinc-500 uppercase">Combined</span>
+          <p className="font-heading text-3xl text-zinc-100">£{combinedTotal.toFixed(2)}</p>
         </div>
       </div>
 
-      <TipsLeaderboard tips={tips} />
+      <TipsLeaderboard tips={periodTips} />
 
-      {/* Stat cards */}
+      {/* Quick stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Hash className="w-4 h-4 text-amber-400" />
-            <p className="font-body text-xs text-amber-400 uppercase tracking-wider">Orders</p>
+        <div className="bg-zinc-800 rounded-lg p-4 flex items-center gap-3">
+          <ShoppingBag className="w-5 h-5 text-zinc-500" />
+          <div>
+            <p className="font-body text-xs text-zinc-500 uppercase">Completed</p>
+            <p className="font-heading text-xl text-zinc-100">{completedOrders.length}</p>
           </div>
-          <p className="font-heading text-3xl text-zinc-100">{completedOrders.length}</p>
-          <p className="font-body text-xs text-zinc-500 mt-1">{pendingOrders.length} pending</p>
         </div>
-
-        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Table2 className="w-4 h-4 text-amber-400" />
-            <p className="font-body text-xs text-amber-400 uppercase tracking-wider">Top Table</p>
+        <div className="bg-zinc-800 rounded-lg p-4 flex items-center gap-3">
+          <Hash className="w-5 h-5 text-zinc-500" />
+          <div>
+            <p className="font-body text-xs text-zinc-500 uppercase">Pending</p>
+            <p className="font-heading text-xl text-amber-400">{pendingOrders.length}</p>
           </div>
-          {topTable ? (
-            <>
-              <p className="font-heading text-3xl text-zinc-100">#{topTable.table}</p>
-              <p className="font-body text-xs text-zinc-500 mt-1">£{topTable.total.toFixed(2)} spent</p>
-            </>
-          ) : (
-            <p className="font-heading text-2xl text-zinc-600">—</p>
-          )}
         </div>
-
-        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <ShoppingBag className="w-4 h-4 text-amber-400" />
-            <p className="font-body text-xs text-amber-400 uppercase tracking-wider">Top Item</p>
+        {topTable && (
+          <div className="bg-zinc-800 rounded-lg p-4 flex items-center gap-3">
+            <Table2 className="w-5 h-5 text-zinc-500" />
+            <div>
+              <p className="font-body text-xs text-zinc-500 uppercase">Top table</p>
+              <p className="font-heading text-lg text-zinc-100">T{topTable.table} · £{topTable.total.toFixed(2)}</p>
+            </div>
           </div>
-          {topItem ? (
-            <>
-              <p className="font-heading text-lg text-zinc-100 leading-tight">{topItem.name}</p>
-              <p className="font-body text-xs text-zinc-500 mt-1">{topItem.count}× ordered</p>
-            </>
-          ) : (
-            <p className="font-heading text-2xl text-zinc-600">—</p>
-          )}
-        </div>
+        )}
+        {topItem && (
+          <div className="bg-zinc-800 rounded-lg p-4 flex items-center gap-3">
+            <TrendingUp className="w-5 h-5 text-zinc-500" />
+            <div>
+              <p className="font-body text-xs text-zinc-500 uppercase">Top item</p>
+              <p className="font-heading text-sm text-zinc-100">{topItem.name} ×{topItem.count}</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Avg order value */}
-      <div className="bg-zinc-800 border border-zinc-700 rounded-xl px-5 py-4 flex items-center justify-between">
+      <div className="flex items-center justify-between bg-zinc-800 rounded-lg px-4 py-3">
         <span className="font-body text-base text-zinc-400 uppercase tracking-wider">Avg order value</span>
         <span className="font-heading text-2xl text-amber-400">£{avgOrderValue.toFixed(2)}</span>
       </div>
@@ -179,16 +209,16 @@ export default function OrdersOverview({ todayOrders, weekOrders, tips = [] }) {
         </div>
       )}
 
-      {/* Orders list */}
+      {/* Orders list — paginated */}
       <div>
         <h3 className="font-heading text-base text-zinc-500 uppercase tracking-wider mb-3">
           All Orders {view === 'today' ? 'Today' : 'This Week'}
         </h3>
         <div className="space-y-2">
-          {orders.length === 0 ? (
+          {listOrders.length === 0 ? (
             <p className="text-center py-8 font-body text-lg text-zinc-500">No orders {view === 'today' ? 'today' : 'this week'}</p>
           ) : (
-            orders.map(order => (
+            listOrders.map(order => (
               <div key={order.id} className="bg-zinc-800 rounded-lg px-4 py-3">
                 <div className="flex items-start justify-between">
                   <div>
@@ -217,7 +247,6 @@ export default function OrdersOverview({ todayOrders, weekOrders, tips = [] }) {
                     <p className="font-body text-xs text-zinc-500">{format(new Date(order.created_at), 'EEE HH:mm')}</p>
                   </div>
                 </div>
-                {/* Compliance badges */}
                 <div className="flex gap-2 mt-2">
                   <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-body ${
                     order.id_checked ? 'bg-amber-900/40 text-amber-400' : 'bg-zinc-700 text-zinc-500'
@@ -236,6 +265,15 @@ export default function OrdersOverview({ todayOrders, weekOrders, tips = [] }) {
             ))
           )}
         </div>
+        {hasNextPage && (
+          <button
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="w-full mt-4 min-h-[48px] rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 font-heading text-sm uppercase tracking-wider text-zinc-300 disabled:opacity-50"
+          >
+            {isFetchingNextPage ? 'Loading…' : 'Load more orders'}
+          </button>
+        )}
       </div>
     </div>
   );

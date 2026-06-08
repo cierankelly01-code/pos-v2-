@@ -1,24 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowLeft, Banknote, CreditCard, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import StaffSelector from '@/components/staff/StaffSelector';
-import { getSessionStaff, setSessionStaff } from '@/lib/useStaff';
+import { getSessionStaff, setSessionStaff, clearSessionStaff } from '@/lib/useStaff';
+import { useRealtimeSubscription } from '@/lib/useRealtimeSubscription';
 
 const TIP_PRESETS = [2, 5, 10, 20];
 
 export default function LiveTables() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [staff, setStaff] = useState(() => getSessionStaff());
+  const [staff, setStaff] = useState(() => getSessionStaff('tables'));
 
   const urlParams = new URLSearchParams(window.location.search);
   const tableParam = urlParams.get('table');
   const [expandedTable, setExpandedTable] = useState(tableParam ? parseInt(tableParam) : null);
   const [closingTable, setClosingTable] = useState(null);
   const [tipAmounts, setTipAmounts] = useState({});
+
+  const realtimeStatus = useRealtimeSubscription({
+    channelName: 'live-tables-orders',
+    table: 'orders',
+    onChange: () => queryClient.invalidateQueries({ queryKey: ['live-tables-orders'] }),
+    enabled: Boolean(staff),
+  });
 
   const { data: orders = [] } = useQuery({
     queryKey: ['live-tables-orders'],
@@ -28,23 +36,14 @@ export default function LiveTables() {
         .select('*')
         .eq('tab_closed', false)
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(200);
       if (error) throw error;
       return data;
     },
-    refetchInterval: false,
-    staleTime: 30000,
+    refetchInterval: realtimeStatus === 'connected' ? false : 15000,
+    staleTime: 10000,
+    enabled: Boolean(staff),
   });
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('live-tables-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['live-tables-orders'] });
-      })
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [queryClient]);
 
   const tableMap = {};
   orders.forEach(order => {
@@ -110,7 +109,7 @@ export default function LiveTables() {
   };
 
   const handleStaffSelect = (selected) => {
-    setSessionStaff(selected);
+    setSessionStaff(selected, 'tables');
     setStaff(selected);
   };
 
@@ -119,7 +118,7 @@ export default function LiveTables() {
       <StaffSelector
         role="waiter"
         title="Who are you?"
-        subtitle="Select your name to close tables"
+        subtitle="Select your name to manage live tables"
         onSelect={handleStaffSelect}
       />
     );
@@ -134,7 +133,7 @@ export default function LiveTables() {
           </button>
           <h1 className="font-heading text-2xl text-amber-400 uppercase tracking-wider">Live Tables</h1>
           <button
-            onClick={() => { setSessionStaff(null); setStaff(null); }}
+            onClick={() => { clearSessionStaff('tables'); setStaff(null); }}
             className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700"
             style={{ borderLeftColor: staff.colour, borderLeftWidth: '3px' }}
           >

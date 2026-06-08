@@ -13,11 +13,11 @@ import IdCalculator from '@/components/order/IdCalculator';
 import AllergenFilterBar from '@/components/order/AllergenFilterBar';
 import DrinksCategoryMenu from '@/components/order/DrinksCategoryMenu';
 import StaffSelector from '@/components/staff/StaffSelector';
-import { getSessionStaff, setSessionStaff } from '@/lib/useStaff';
+import { getSessionStaff, setSessionStaff, clearSessionStaff } from '@/lib/useStaff';
 
 export default function OrderPage() {
   const { data: settings, isLoading } = useSettings();
-  const [staff, setStaff] = useState(() => getSessionStaff());
+  const [staff, setStaff] = useState(() => getSessionStaff('waiter'));
   const [step, setStep] = useState('table');
   const [tableNumber, setTableNumber] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
@@ -116,7 +116,7 @@ export default function OrderPage() {
         role="waiter"
         title="Who are you?"
         subtitle="Select your name before taking orders"
-        onSelect={(s) => { setSessionStaff(s); setStaff(s); }}
+        onSelect={(s) => { setSessionStaff(s, 'waiter'); setStaff(s); }}
       />
     );
   }
@@ -168,7 +168,7 @@ export default function OrderPage() {
           </h2>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setSessionStaff(null); setStaff(null); }}
+              onClick={() => { clearSessionStaff('waiter'); setStaff(null); }}
               className="px-3 py-1 rounded-lg font-body text-xs border border-zinc-700 text-zinc-400"
               style={{ borderLeftColor: staff.colour, borderLeftWidth: '3px' }}
             >

@@ -6,12 +6,13 @@ import OrderCard from '@/components/bar/OrderCard';
 import HistoryPanel from '@/components/bar/HistoryPanel';
 import AddToTabModal from '@/components/bar/AddToTabModal';
 import StaffSelector from '@/components/staff/StaffSelector';
-import { getSessionStaff, setSessionStaff } from '@/lib/useStaff';
+import { RealtimeStatusBadge } from '@/components/RealtimeStatusBadge';
+import { getSessionStaff, setSessionStaff, clearSessionStaff } from '@/lib/useStaff';
+import { useRealtimeSubscription } from '@/lib/useRealtimeSubscription';
 import { startOfToday } from 'date-fns';
 import NavMenu from '@/components/NavMenu';
 import { PlusCircle } from 'lucide-react';
 
-// Synthesise a short "ding" using Web Audio API — no external files needed
 function playPing() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -26,21 +27,26 @@ function playPing() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.5);
-  } catch (_) {
-    // Audio not available — silent fail
-  }
+  } catch (_) {}
 }
 
 export default function BarPage() {
   const { data: settings } = useSettings();
   const queryClient = useQueryClient();
-  const [staff, setStaff] = useState(() => getSessionStaff());
+  const [staff, setStaff] = useState(() => getSessionStaff('bar'));
   const [activeTab, setActiveTab] = useState('queue');
   const [flashActive, setFlashActive] = useState(false);
   const [showAddToTab, setShowAddToTab] = useState(false);
-  const knownOrderIds = useRef(null); // null = first load, don't alert
+  const knownOrderIds = useRef(null);
 
   const todayStr = useMemo(() => startOfToday().toISOString(), []);
+
+  const realtimeStatus = useRealtimeSubscription({
+    channelName: 'bar-orders',
+    table: 'orders',
+    onChange: () => queryClient.invalidateQueries({ queryKey: ['bar-orders'] }),
+    enabled: Boolean(staff),
+  });
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['bar-orders'],
@@ -48,20 +54,20 @@ export default function BarPage() {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .gte('created_at', todayStr)
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(100);
       if (error) throw error;
-      return data.filter(o => new Date(o.created_at) >= new Date(todayStr));
+      return data;
     },
-    refetchInterval: false,
-    staleTime: 30000,
+    refetchInterval: realtimeStatus === 'connected' ? false : 15000,
+    staleTime: 10000,
+    enabled: Boolean(staff),
   });
 
-  // Detect genuinely new pending orders and alert
   useEffect(() => {
     const pendingIds = orders.filter(o => o.status === 'pending').map(o => o.id);
     if (knownOrderIds.current === null) {
-      // First load — seed known IDs silently
       knownOrderIds.current = new Set(pendingIds);
       return;
     }
@@ -69,23 +75,12 @@ export default function BarPage() {
     if (hasNew) {
       playPing();
       setFlashActive(true);
-      setTimeout(() => setFlashActive(false), 1000);
-      // Switch to queue tab so bartender sees the order
+      const t = setTimeout(() => setFlashActive(false), 1000);
       setActiveTab('queue');
+      return () => clearTimeout(t);
     }
     knownOrderIds.current = new Set(pendingIds);
   }, [orders]);
-
-  // Real-time subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('bar-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['bar-orders'] });
-      })
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [queryClient]);
 
   const pendingOrders = useMemo(
     () => orders.filter(o => o.status === 'pending'),
@@ -99,6 +94,7 @@ export default function BarPage() {
     () => [...new Set(orders.filter(o => !o.tab_closed).map(o => o.table_number))].sort((a, b) => a - b),
     [orders]
   );
+
   const completeOrder = async (order) => {
     await supabase.from('orders').update({
       status: 'complete',
@@ -113,7 +109,7 @@ export default function BarPage() {
         role="bar"
         title="Who are you?"
         subtitle="Select your name before the bar queue"
-        onSelect={(s) => { setSessionStaff(s); setStaff(s); }}
+        onSelect={(s) => { setSessionStaff(s, 'bar'); setStaff(s); }}
       />
     );
   }
@@ -132,38 +128,37 @@ export default function BarPage() {
         />
       )}
 
-      {/* Amber flash overlay on new order */}
       <div
         className={`pointer-events-none fixed inset-0 z-50 bg-amber-400 transition-opacity duration-300 ${
           flashActive ? 'opacity-20' : 'opacity-0'
         }`}
       />
 
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-[#f5f0e8] border-b border-stone-300">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <div className="flex items-center gap-3">
               <NavMenu />
               <h1 className="font-heading text-2xl text-stone-800 uppercase tracking-wider">
                 {settings?.venue_name || 'Stratford Bar'}
               </h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <RealtimeStatusBadge status={realtimeStatus} />
               <button
-                onClick={() => { setSessionStaff(null); setStaff(null); }}
+                onClick={() => { clearSessionStaff('bar'); setStaff(null); }}
                 className="px-3 py-1.5 rounded-lg bg-stone-200 font-body text-sm text-stone-700 border-l-4"
                 style={{ borderLeftColor: staff.colour }}
               >
                 {staff.name}
               </button>
               <button
-              onClick={() => setShowAddToTab(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-heading text-base uppercase tracking-wider transition-colors"
-            >
-              <PlusCircle className="w-4 h-4" />
-              Add to Tab
-            </button>
+                onClick={() => setShowAddToTab(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-heading text-base uppercase tracking-wider transition-colors"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Add to Tab
+              </button>
             </div>
           </div>
 
@@ -197,7 +192,6 @@ export default function BarPage() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="max-w-3xl mx-auto px-4 py-4">
         {isLoading ? (
           <div className="flex justify-center py-16">
@@ -212,11 +206,7 @@ export default function BarPage() {
           ) : (
             <div className="space-y-4">
               {pendingOrders.map(order => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onComplete={completeOrder}
-                />
+                <OrderCard key={order.id} order={order} onComplete={completeOrder} />
               ))}
             </div>
           )

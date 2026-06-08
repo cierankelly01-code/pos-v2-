@@ -13,7 +13,7 @@ export default function MarketingList() {
         .from('bookings')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(2000);
+        .limit(500);
       if (error) throw error;
       return data;
     },

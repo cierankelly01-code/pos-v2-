@@ -6,6 +6,12 @@ export const STAFF_COLOURS = [
   '#14B8A6', '#F97316', '#6366F1', '#84CC16',
 ];
 
+const SESSION_KEYS = {
+  waiter: 'pos_staff_waiter',
+  bar: 'pos_staff_bar',
+  tables: 'pos_staff_tables',
+};
+
 export function useStaff({ role = null, activeOnly = true } = {}) {
   return useQuery({
     queryKey: ['staff', role, activeOnly],
@@ -17,13 +23,12 @@ export function useStaff({ role = null, activeOnly = true } = {}) {
       if (error) throw error;
       return data;
     },
-    staleTime: 30000,
+    staleTime: 60000,
   });
 }
 
 export function useStaffMutations() {
   const queryClient = useQueryClient();
-
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['staff'] });
 
   const createStaff = useMutation({
@@ -55,19 +60,30 @@ export function useStaffMutations() {
   return { createStaff, updateStaff, deleteStaff };
 }
 
-export function getSessionStaff() {
+/** @param {'waiter'|'bar'|'tables'} context */
+export function getSessionStaff(context) {
   try {
-    const raw = sessionStorage.getItem('pos_staff');
-    return raw ? JSON.parse(raw) : null;
+    const key = SESSION_KEYS[context];
+    if (!key) return null;
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const staff = JSON.parse(raw);
+    if (context === 'waiter' && staff.role && staff.role !== 'waiter') return null;
+    if (context === 'bar' && staff.role && staff.role !== 'bar') return null;
+    return staff;
   } catch {
     return null;
   }
 }
 
-export function setSessionStaff(staff) {
-  sessionStorage.setItem('pos_staff', JSON.stringify(staff));
+/** @param {'waiter'|'bar'|'tables'} context */
+export function setSessionStaff(staff, context) {
+  const key = SESSION_KEYS[context];
+  if (key) sessionStorage.setItem(key, JSON.stringify(staff));
 }
 
-export function clearSessionStaff() {
-  sessionStorage.removeItem('pos_staff');
+/** @param {'waiter'|'bar'|'tables'} context */
+export function clearSessionStaff(context) {
+  const key = SESSION_KEYS[context];
+  if (key) sessionStorage.removeItem(key);
 }

@@ -23,16 +23,10 @@ export default function StaffSelector({ role, title = 'Who are you?', subtitle, 
 
       {staff.length === 0 ? (
         <div className="text-center max-w-sm space-y-3">
-          <p className="font-body text-zinc-400">No staff profiles yet.</p>
+          <p className="font-body text-zinc-400">No {role || 'staff'} profiles yet.</p>
           <p className="font-body text-sm text-zinc-600">
             Ask a manager to add staff in Admin → Staff.
           </p>
-          <button
-            onClick={() => onSelect({ name: 'Staff', colour: '#F59E0B' })}
-            className="mt-4 min-h-[56px] px-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-heading uppercase tracking-wider"
-          >
-            Continue without profile
-          </button>
         </div>
       ) : (
         <div className="w-full max-w-md grid grid-cols-1 gap-3">

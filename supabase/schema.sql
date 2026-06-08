@@ -125,6 +125,8 @@ create index if not exists orders_status_idx on public.orders (status);
 create index if not exists orders_table_number_idx on public.orders (table_number);
 create index if not exists orders_tab_closed_idx on public.orders (tab_closed);
 create index if not exists orders_created_at_idx on public.orders (created_at desc);
+create index if not exists orders_tab_closed_created_at_idx on public.orders (tab_closed, created_at desc);
+create index if not exists orders_status_created_at_idx on public.orders (status, created_at desc);
 
 -- -----------------------------------------------------------------------------
 -- BOOKINGS

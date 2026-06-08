@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettings, useUpdateSettings } from '@/lib/useSettings';
+import { useRealtimeSubscription } from '@/lib/useRealtimeSubscription';
 import MenuEditor from '@/components/admin/MenuEditor';
 import OrdersOverview from '@/components/admin/OrdersOverview';
 import FirstTimeSetup from '@/components/admin/FirstTimeSetup';
@@ -32,29 +33,44 @@ export default function AdminPage() {
   const todayStr = useMemo(() => startOfToday().toISOString(), []);
   const weekStr = useMemo(() => startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(), []);
 
-  const { data: allOrders = [], refetch } = useQuery({
-    queryKey: ['admin-orders'],
+  const { data: todayOrders = [] } = useQuery({
+    queryKey: ['admin-orders', 'today'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .gte('created_at', todayStr)
         .order('created_at', { ascending: false })
-        .limit(1000);
+        .limit(500);
       if (error) throw error;
       return data;
     },
     staleTime: 30000,
   });
 
-  useEffect(() => {
-    const channel = supabase
-      .channel('admin-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        refetch();
-      })
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [refetch]);
+  const { data: weekOrders = [] } = useQuery({
+    queryKey: ['admin-orders', 'week'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .gte('created_at', weekStr)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 30000,
+    enabled: activeTab === 'orders' || showEndOfNight,
+  });
+
+  useRealtimeSubscription({
+    channelName: 'admin-orders',
+    table: 'orders',
+    onChange: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
 
   const { data: allTips = [] } = useQuery({
     queryKey: ['admin-tips'],
@@ -62,26 +78,22 @@ export default function AdminPage() {
       const { data, error } = await supabase
         .from('tips')
         .select('*')
+        .gte('created_at', weekStr)
         .order('created_at', { ascending: false })
-        .limit(2000);
+        .limit(500);
       if (error) throw error;
       return data;
     },
     staleTime: 30000,
   });
 
-  useEffect(() => {
-    const channel = supabase
-      .channel('admin-tips')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tips' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['admin-tips'] });
-      })
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [queryClient]);
-
-  const todayOrders = useMemo(() => allOrders.filter(o => new Date(o.created_at) >= new Date(todayStr)), [allOrders, todayStr]);
-  const weekOrders = useMemo(() => allOrders.filter(o => new Date(o.created_at) >= new Date(weekStr)), [allOrders, weekStr]);
+  useRealtimeSubscription({
+    channelName: 'admin-tips',
+    table: 'tips',
+    onChange: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-tips'] });
+    },
+  });
 
   if (settingsLoading) {
     return (
@@ -133,7 +145,7 @@ export default function AdminPage() {
   };
 
   const clearQueue = async () => {
-    const pending = allOrders.filter(o => o.status === 'pending');
+    const pending = todayOrders.filter(o => o.status === 'pending');
     if (!pending.length) {
       toast.message('No pending orders to clear');
       return;
@@ -155,7 +167,7 @@ export default function AdminPage() {
       return;
     }
     queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
-    toast.success(`Wiped ${allOrders.length} orders`);
+    toast.success(`Wiped today's orders (${todayOrders.length})`);
   };
 
   const saveFloorMap = async (floorMap) => {
@@ -279,7 +291,7 @@ export default function AdminPage() {
 
       {showEndOfNight && (
         <EndOfNightSummary
-          orders={allOrders}
+          orders={todayOrders}
           tips={allTips}
           onClose={() => setShowEndOfNight(false)}
         />
