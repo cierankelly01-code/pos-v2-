@@ -27,7 +27,8 @@ export default function LiveTables() {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 5000,
+    refetchInterval: false,
+    staleTime: 30000,
   });
 
   // Real-time updates
@@ -55,13 +56,14 @@ export default function LiveTables() {
   const closeTable = async (tableNumber, paymentMethod) => {
     setClosingTable({ tableNumber, paymentMethod });
     const tableOrders = tableMap[tableNumber]?.orders || [];
-    for (const order of tableOrders) {
+    const ids = tableOrders.map(o => o.id);
+    if (ids.length) {
       await supabase.from('orders').update({
         tab_closed: true,
         payment_method: paymentMethod,
         status: 'complete',
-        completed_at: order.completed_at || new Date().toISOString(),
-      }).eq('id', order.id);
+        completed_at: new Date().toISOString(),
+      }).in('id', ids);
     }
     queryClient.invalidateQueries({ queryKey: ['live-tables-orders'] });
     setClosingTable(null);

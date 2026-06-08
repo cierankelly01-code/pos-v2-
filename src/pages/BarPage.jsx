@@ -50,7 +50,8 @@ export default function BarPage() {
       if (error) throw error;
       return data.filter(o => new Date(o.created_at) >= new Date(todayStr));
     },
-    refetchInterval: 5000,
+    refetchInterval: false,
+    staleTime: 30000,
   });
 
   // Detect genuinely new pending orders and alert

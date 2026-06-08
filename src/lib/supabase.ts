@@ -3,16 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const viteEnvKeys = Object.keys(import.meta.env).filter((key) =>
-  key.startsWith('VITE_')
-);
-
-console.log('[supabase] env check', {
-  VITE_SUPABASE_URL: supabaseUrl ? `${supabaseUrl.slice(0, 30)}…` : undefined,
-  VITE_SUPABASE_URL_set: Boolean(supabaseUrl),
-  VITE_SUPABASE_ANON_KEY_set: Boolean(supabaseAnonKey),
-  viteEnvKeys,
-});
+if (import.meta.env.DEV) {
+  const viteEnvKeys = Object.keys(import.meta.env).filter((key) =>
+    key.startsWith('VITE_')
+  );
+  console.log('[supabase] env check', {
+    VITE_SUPABASE_URL_set: Boolean(supabaseUrl),
+    VITE_SUPABASE_ANON_KEY_set: Boolean(supabaseAnonKey),
+    viteEnvKeys,
+  });
+}
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error(

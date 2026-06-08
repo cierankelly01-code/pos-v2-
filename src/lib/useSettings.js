@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
+import { isSchemaMissingError } from '@/components/DatabaseSetupNotice';
 
 export function useSettings() {
   return useQuery({
@@ -11,6 +12,11 @@ export function useSettings() {
         .limit(1)
         .single();
       if (error && error.code === 'PGRST116') return null;
+      if (isSchemaMissingError(error)) {
+        const err = new Error('DATABASE_NOT_SETUP');
+        err.cause = error;
+        throw err;
+      }
       if (error) throw error;
       return data;
     },

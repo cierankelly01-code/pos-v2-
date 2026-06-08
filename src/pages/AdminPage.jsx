@@ -8,16 +8,23 @@ import FirstTimeSetup from '@/components/admin/FirstTimeSetup';
 import AppSettings from '@/components/admin/AppSettings';
 import FloorMapEditor from '@/components/admin/FloorMapEditor';
 import MarketingList from '@/components/admin/MarketingList';
+import PinGate from '@/components/admin/PinGate';
+import DatabaseSetupNotice, { isSchemaMissingError } from '@/components/DatabaseSetupNotice';
 import { startOfToday, startOfWeek } from 'date-fns';
 import { toast } from 'sonner';
 import NavMenu from '@/components/NavMenu';
 
+const ADMIN_UNLOCK_KEY = 'admin_unlocked';
+
 export default function AdminPage() {
-  const { data: settings, isLoading: settingsLoading } = useSettings();
+  const { data: settings, isLoading: settingsLoading, error: settingsError } = useSettings();
   const updateSettings = useUpdateSettings();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('menu');
   const [tableCount, setTableCount] = useState(null);
+  const [unlocked, setUnlocked] = useState(
+    () => sessionStorage.getItem(ADMIN_UNLOCK_KEY) === '1'
+  );
 
   const todayStr = useMemo(() => startOfToday().toISOString(), []);
   const weekStr = useMemo(() => startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(), []);
@@ -33,7 +40,7 @@ export default function AdminPage() {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 10000,
+    staleTime: 30000,
   });
 
   useEffect(() => {
@@ -57,12 +64,26 @@ export default function AdminPage() {
     );
   }
 
+  if (settingsError?.message === 'DATABASE_NOT_SETUP' || isSchemaMissingError(settingsError?.cause)) {
+    return <DatabaseSetupNotice />;
+  }
+
   // First time — no settings record exists yet
   if (!settings) {
     return <FirstTimeSetup onComplete={() => {}} />;
   }
 
-
+  if (!unlocked) {
+    return (
+      <PinGate
+        correctPin={settings.admin_pin || '1234'}
+        onUnlock={() => {
+          sessionStorage.setItem(ADMIN_UNLOCK_KEY, '1');
+          setUnlocked(true);
+        }}
+      />
+    );
+  }
 
   const saveMenu = async (items) => {
     await updateSettings.mutateAsync({ menu_items: items });
@@ -78,8 +99,14 @@ export default function AdminPage() {
 
   const clearQueue = async () => {
     const pending = allOrders.filter(o => o.status === 'pending');
-    for (const o of pending) {
-      await supabase.from('orders').delete().eq('id', o.id);
+    if (!pending.length) {
+      toast.message('No pending orders to clear');
+      return;
+    }
+    const { error } = await supabase.from('orders').delete().eq('status', 'pending');
+    if (error) {
+      toast.error('Failed to clear queue');
+      return;
     }
     queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
     toast.success(`Cleared ${pending.length} pending orders`);
@@ -87,8 +114,10 @@ export default function AdminPage() {
 
   const wipeAllOrders = async () => {
     if (!window.confirm('Wipe ALL orders? This cannot be undone.')) return;
-    for (const o of allOrders) {
-      await supabase.from('orders').delete().eq('id', o.id);
+    const { error } = await supabase.from('orders').delete().gte('created_at', '1970-01-01');
+    if (error) {
+      toast.error('Failed to wipe orders');
+      return;
     }
     queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
     toast.success(`Wiped ${allOrders.length} orders`);

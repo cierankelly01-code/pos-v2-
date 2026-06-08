@@ -17,6 +17,8 @@ function resolveSupabaseEnv(mode) {
     fileEnv.VITE_SUPABASE_ANON_KEY ??
     process.env.SUPABASE_ANON_KEY ??
     fileEnv.SUPABASE_ANON_KEY ??
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    fileEnv.VITE_SUPABASE_PUBLISHABLE_KEY ??
     ''
 
   return { supabaseUrl, supabaseAnonKey }
