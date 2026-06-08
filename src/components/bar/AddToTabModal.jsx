@@ -4,7 +4,7 @@ import { useSettings } from '@/lib/useSettings';
 import { X, Plus, Minus, Check, Loader2 } from 'lucide-react';
 import { DRINK_SUBCATEGORIES } from '@/components/admin/MenuEditor';
 
-export default function AddToTabModal({ occupiedTables, onClose, onDone }) {
+export default function AddToTabModal({ occupiedTables, staff, onClose, onDone }) {
   const { data: settings } = useSettings();
   const [step, setStep] = useState('table'); // table | items | confirm
   const [tableNumber, setTableNumber] = useState(null);
@@ -67,6 +67,8 @@ export default function AddToTabModal({ occupiedTables, onClose, onDone }) {
       allergy_checked: true,
       allergens: [],
       tab_closed: false,
+      staff_name: staff?.name || null,
+      staff_colour: staff?.colour || null,
     });
     setSending(false);
     onDone();

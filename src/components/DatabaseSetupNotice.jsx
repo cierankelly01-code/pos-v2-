@@ -26,7 +26,9 @@ export default function DatabaseSetupNotice() {
           <span className="text-zinc-300">bookings</span>,{' '}
           <span className="text-zinc-300">users</span>,{' '}
           <span className="text-zinc-300">products</span>,{' '}
-          <span className="text-zinc-300">allergens</span>
+          <span className="text-zinc-300">allergens</span>,{' '}
+          <span className="text-zinc-300">staff</span>,{' '}
+          <span className="text-zinc-300">tips</span>
         </p>
         <p className="font-body text-xs text-zinc-600">
           See <code className="text-zinc-400">supabase/SETUP.md</code> for step-by-step instructions.

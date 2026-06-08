@@ -5,6 +5,8 @@ import { useSettings } from '@/lib/useSettings';
 import OrderCard from '@/components/bar/OrderCard';
 import HistoryPanel from '@/components/bar/HistoryPanel';
 import AddToTabModal from '@/components/bar/AddToTabModal';
+import StaffSelector from '@/components/staff/StaffSelector';
+import { getSessionStaff, setSessionStaff } from '@/lib/useStaff';
 import { startOfToday } from 'date-fns';
 import NavMenu from '@/components/NavMenu';
 import { PlusCircle } from 'lucide-react';
@@ -32,6 +34,7 @@ function playPing() {
 export default function BarPage() {
   const { data: settings } = useSettings();
   const queryClient = useQueryClient();
+  const [staff, setStaff] = useState(() => getSessionStaff());
   const [activeTab, setActiveTab] = useState('queue');
   const [flashActive, setFlashActive] = useState(false);
   const [showAddToTab, setShowAddToTab] = useState(false);
@@ -104,11 +107,23 @@ export default function BarPage() {
     queryClient.invalidateQueries({ queryKey: ['bar-orders'] });
   };
 
+  if (!staff) {
+    return (
+      <StaffSelector
+        role="bar"
+        title="Who are you?"
+        subtitle="Select your name before the bar queue"
+        onSelect={(s) => { setSessionStaff(s); setStaff(s); }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f0e8] relative">
       {showAddToTab && (
         <AddToTabModal
           occupiedTables={occupiedTables}
+          staff={staff}
           onClose={() => setShowAddToTab(false)}
           onDone={() => {
             setShowAddToTab(false);
@@ -134,13 +149,22 @@ export default function BarPage() {
                 {settings?.venue_name || 'Stratford Bar'}
               </h1>
             </div>
-            <button
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setSessionStaff(null); setStaff(null); }}
+                className="px-3 py-1.5 rounded-lg bg-stone-200 font-body text-sm text-stone-700 border-l-4"
+                style={{ borderLeftColor: staff.colour }}
+              >
+                {staff.name}
+              </button>
+              <button
               onClick={() => setShowAddToTab(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-heading text-base uppercase tracking-wider transition-colors"
             >
               <PlusCircle className="w-4 h-4" />
               Add to Tab
             </button>
+            </div>
           </div>
 
           <div className="flex">

@@ -114,7 +114,9 @@ create table if not exists public.orders (
   payment_method text check (payment_method is null or payment_method in ('cash', 'card')),
   id_checked boolean not null default false,
   allergy_checked boolean not null default false,
-  allergens jsonb not null default '[]'::jsonb
+  allergens jsonb not null default '[]'::jsonb,
+  staff_name text,
+  staff_colour text
 );
 
 comment on table public.orders is 'Table orders — pending until bar completes, tab_closed when paid';
@@ -157,6 +159,38 @@ create index if not exists bookings_status_idx on public.bookings (status);
 create index if not exists bookings_created_at_idx on public.bookings (created_at desc);
 
 -- -----------------------------------------------------------------------------
+-- STAFF (team profiles for waiter/bar/admin)
+-- -----------------------------------------------------------------------------
+create table if not exists public.staff (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  name text not null,
+  role text not null default 'waiter'
+    check (role in ('waiter', 'bar', 'admin')),
+  active boolean not null default true,
+  colour text not null default '#F59E0B'
+);
+
+create index if not exists staff_role_idx on public.staff (role);
+create index if not exists staff_active_idx on public.staff (active);
+
+-- -----------------------------------------------------------------------------
+-- TIPS (recorded separately from order totals)
+-- -----------------------------------------------------------------------------
+create table if not exists public.tips (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  table_number integer not null check (table_number between 1 and 99),
+  amount numeric(10, 2) not null check (amount >= 0),
+  staff_name text not null,
+  payment_method text check (payment_method is null or payment_method in ('cash', 'card'))
+);
+
+create index if not exists tips_created_at_idx on public.tips (created_at desc);
+create index if not exists tips_staff_name_idx on public.tips (staff_name);
+
+-- -----------------------------------------------------------------------------
 -- UPDATED_AT trigger
 -- -----------------------------------------------------------------------------
 create or replace function public.set_updated_at()
@@ -194,6 +228,11 @@ create trigger set_bookings_updated_at
   before update on public.bookings
   for each row execute function public.set_updated_at();
 
+drop trigger if exists set_staff_updated_at on public.staff;
+create trigger set_staff_updated_at
+  before update on public.staff
+  for each row execute function public.set_updated_at();
+
 -- -----------------------------------------------------------------------------
 -- ROW LEVEL SECURITY (staff kiosk app — anon read/write)
 -- -----------------------------------------------------------------------------
@@ -204,6 +243,8 @@ alter table public.product_allergens enable row level security;
 alter table public.settings enable row level security;
 alter table public.orders enable row level security;
 alter table public.bookings enable row level security;
+alter table public.staff enable row level security;
+alter table public.tips enable row level security;
 
 drop policy if exists "anon_all_allergens" on public.allergens;
 create policy "anon_all_allergens" on public.allergens
@@ -231,6 +272,14 @@ create policy "anon_all_orders" on public.orders
 
 drop policy if exists "anon_all_bookings" on public.bookings;
 create policy "anon_all_bookings" on public.bookings
+  for all to anon using (true) with check (true);
+
+drop policy if exists "anon_all_staff" on public.staff;
+create policy "anon_all_staff" on public.staff
+  for all to anon using (true) with check (true);
+
+drop policy if exists "anon_all_tips" on public.tips;
+create policy "anon_all_tips" on public.tips
   for all to anon using (true) with check (true);
 
 -- -----------------------------------------------------------------------------
@@ -264,6 +313,13 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'products'
   ) then
     alter publication supabase_realtime add table public.products;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'tips'
+  ) then
+    alter publication supabase_realtime add table public.tips;
   end if;
 end $$;
 
@@ -317,6 +373,10 @@ from (values
   ('Beef Burger', 13.95::numeric, 'food', null, 5)
 ) as v(name, price, category, subcategory, sort_order)
 where not exists (select 1 from public.products limit 1);
+
+-- Migrations for existing deployments
+alter table public.orders add column if not exists staff_name text;
+alter table public.orders add column if not exists staff_colour text;
 
 -- =============================================================================
 -- Done. Verify with: npm run db:check

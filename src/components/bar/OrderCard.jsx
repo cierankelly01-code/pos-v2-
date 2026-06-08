@@ -31,6 +31,16 @@ export default function OrderCard({ order, onComplete }) {
         </span>
         <span className="font-body text-base text-stone-400">{timeAgo}</span>
       </div>
+      {order.staff_name && (
+        <div className="px-5 py-2 bg-stone-50 border-b border-stone-100">
+          <span
+            className="inline-flex items-center gap-1 font-body text-sm px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: `${order.staff_colour || '#F59E0B'}22`, color: order.staff_colour || '#B45309' }}
+          >
+            {order.staff_name}
+          </span>
+        </div>
+      )}
 
       {/* Divider */}
       <div className="mx-5 border-t border-stone-200" />

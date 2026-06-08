@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
-import { TrendingUp, Hash, Table2, ShoppingBag, ShieldCheck, Leaf } from 'lucide-react';
+import { format, startOfWeek, endOfWeek, startOfToday } from 'date-fns';
+import { TrendingUp, Hash, Table2, ShoppingBag, ShieldCheck, Leaf, Coins } from 'lucide-react';
+import { TipsLeaderboard } from '@/components/admin/EndOfNightSummary';
 
-export default function OrdersOverview({ todayOrders, weekOrders }) {
+export default function OrdersOverview({ todayOrders, weekOrders, tips = [] }) {
   const [view, setView] = useState('today');
 
   const orders = view === 'today' ? todayOrders : weekOrders;
@@ -10,6 +11,16 @@ export default function OrdersOverview({ todayOrders, weekOrders }) {
   const pendingOrders = orders.filter(o => o.status === 'pending');
 
   const revenue = completedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+  const periodTips = useMemo(() => {
+    const from = view === 'today'
+      ? startOfToday()
+      : startOfWeek(new Date(), { weekStartsOn: 1 });
+    return tips.filter(t => new Date(t.created_at) >= from);
+  }, [view, tips]);
+
+  const tipsTotal = periodTips.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const combinedTotal = revenue + tipsTotal;
 
   const topTable = useMemo(() => {
     const byTable = {};
@@ -68,17 +79,32 @@ export default function OrdersOverview({ todayOrders, weekOrders }) {
         </p>
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-emerald-900/30 border border-emerald-700/30 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
+      {/* Revenue / Tips / Combined */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-emerald-900/30 border border-emerald-700/30 rounded-xl p-3">
+          <div className="flex items-center gap-1 mb-1">
+            <TrendingUp className="w-3 h-3 text-emerald-400" />
             <p className="font-body text-xs text-emerald-400 uppercase tracking-wider">Revenue</p>
           </div>
-          <p className="font-heading text-3xl text-emerald-400">£{revenue.toFixed(2)}</p>
-          <p className="font-body text-xs text-zinc-500 mt-1">{view === 'today' ? 'today' : 'this week'}</p>
+          <p className="font-heading text-2xl text-emerald-400">£{revenue.toFixed(2)}</p>
         </div>
+        <div className="bg-amber-900/30 border border-amber-700/30 rounded-xl p-3">
+          <div className="flex items-center gap-1 mb-1">
+            <Coins className="w-3 h-3 text-amber-400" />
+            <p className="font-body text-xs text-amber-400 uppercase tracking-wider">Tips</p>
+          </div>
+          <p className="font-heading text-2xl text-amber-400">£{tipsTotal.toFixed(2)}</p>
+        </div>
+        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3">
+          <p className="font-body text-xs text-zinc-400 uppercase tracking-wider mb-1">Combined</p>
+          <p className="font-heading text-2xl text-zinc-100">£{combinedTotal.toFixed(2)}</p>
+        </div>
+      </div>
 
+      <TipsLeaderboard tips={tips} />
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <Hash className="w-4 h-4 text-amber-400" />
@@ -177,6 +203,14 @@ export default function OrdersOverview({ todayOrders, weekOrders }) {
                     <p className="font-body text-sm text-zinc-500 mt-0.5">
                       {(order.items || []).map(i => `${i.quantity}× ${i.name}`).join(', ')}
                     </p>
+                    {order.staff_name && (
+                      <span
+                        className="inline-flex items-center gap-1 mt-1 text-xs font-body px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${order.staff_colour || '#F59E0B'}33`, color: order.staff_colour || '#F59E0B' }}
+                      >
+                        {order.staff_name}
+                      </span>
+                    )}
                   </div>
                   <div className="text-right shrink-0 ml-3">
                     <p className="font-heading text-lg text-amber-400">£{order.total?.toFixed(2)}</p>

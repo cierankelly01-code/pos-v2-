@@ -8,6 +8,8 @@ import FirstTimeSetup from '@/components/admin/FirstTimeSetup';
 import AppSettings from '@/components/admin/AppSettings';
 import FloorMapEditor from '@/components/admin/FloorMapEditor';
 import MarketingList from '@/components/admin/MarketingList';
+import StaffEditor from '@/components/admin/StaffEditor';
+import EndOfNightSummary from '@/components/admin/EndOfNightSummary';
 import PinGate from '@/components/admin/PinGate';
 import DatabaseSetupNotice, { isSchemaMissingError } from '@/components/DatabaseSetupNotice';
 import { startOfToday, startOfWeek } from 'date-fns';
@@ -25,6 +27,7 @@ export default function AdminPage() {
   const [unlocked, setUnlocked] = useState(
     () => sessionStorage.getItem(ADMIN_UNLOCK_KEY) === '1'
   );
+  const [showEndOfNight, setShowEndOfNight] = useState(false);
 
   const todayStr = useMemo(() => startOfToday().toISOString(), []);
   const weekStr = useMemo(() => startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(), []);
@@ -52,6 +55,30 @@ export default function AdminPage() {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [refetch]);
+
+  const { data: allTips = [] } = useQuery({
+    queryKey: ['admin-tips'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tips')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(2000);
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 30000,
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-tips')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tips' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['admin-tips'] });
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [queryClient]);
 
   const todayOrders = useMemo(() => allOrders.filter(o => new Date(o.created_at) >= new Date(todayStr)), [allOrders, todayStr]);
   const weekOrders = useMemo(() => allOrders.filter(o => new Date(o.created_at) >= new Date(weekStr)), [allOrders, weekStr]);
@@ -137,11 +164,12 @@ export default function AdminPage() {
 
   const tabs = [
     { key: 'menu', label: 'Menu' },
+    { key: 'staff', label: 'Staff' },
     { key: 'tables', label: 'Tables' },
-    { key: 'floormap', label: 'Floor Map' },
+    { key: 'floormap', label: 'Map' },
     { key: 'orders', label: 'Orders' },
-    { key: 'marketing', label: 'Marketing' },
-    { key: 'settings', label: 'Settings' },
+    { key: 'marketing', label: 'Mktg' },
+    { key: 'settings', label: 'Set' },
   ];
 
   return (
@@ -151,16 +179,22 @@ export default function AdminPage() {
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3 mb-3">
             <NavMenu />
-            <h1 className="font-heading text-2xl text-amber-400 uppercase tracking-wider">
+            <h1 className="font-heading text-2xl text-amber-400 uppercase tracking-wider flex-1">
               Admin Panel
             </h1>
+            <button
+              onClick={() => setShowEndOfNight(true)}
+              className="shrink-0 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 font-heading text-xs uppercase tracking-wider text-amber-400"
+            >
+              End of Night
+            </button>
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 overflow-x-auto pb-1">
             {tabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 py-3 rounded-lg font-heading text-base uppercase tracking-wider transition-colors
+                className={`flex-1 py-3 rounded-lg font-heading text-sm uppercase tracking-wider transition-colors shrink-0 min-w-[4rem]
                   ${activeTab === tab.key
                     ? 'bg-amber-500 text-black'
                     : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
@@ -176,6 +210,10 @@ export default function AdminPage() {
       <div className="max-w-2xl mx-auto px-4 py-6">
         {activeTab === 'menu' && (
           <MenuEditor menuItems={settings?.menu_items || []} onSave={saveMenu} />
+        )}
+
+        {activeTab === 'staff' && (
+          <StaffEditor />
         )}
 
         {activeTab === 'tables' && (
@@ -227,7 +265,7 @@ export default function AdminPage() {
         )}
 
         {activeTab === 'orders' && (
-          <OrdersOverview todayOrders={todayOrders} weekOrders={weekOrders} />
+          <OrdersOverview todayOrders={todayOrders} weekOrders={weekOrders} tips={allTips} />
         )}
 
         {activeTab === 'marketing' && (
@@ -238,6 +276,14 @@ export default function AdminPage() {
           <AppSettings settings={settings} />
         )}
       </div>
+
+      {showEndOfNight && (
+        <EndOfNightSummary
+          orders={allOrders}
+          tips={allTips}
+          onClose={() => setShowEndOfNight(false)}
+        />
+      )}
     </div>
   );
 }

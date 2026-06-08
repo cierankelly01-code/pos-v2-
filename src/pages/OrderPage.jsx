@@ -12,10 +12,13 @@ import ChecklistModal from '@/components/order/ChecklistModal';
 import IdCalculator from '@/components/order/IdCalculator';
 import AllergenFilterBar from '@/components/order/AllergenFilterBar';
 import DrinksCategoryMenu from '@/components/order/DrinksCategoryMenu';
+import StaffSelector from '@/components/staff/StaffSelector';
+import { getSessionStaff, setSessionStaff } from '@/lib/useStaff';
 
 export default function OrderPage() {
   const { data: settings, isLoading } = useSettings();
-  const [step, setStep] = useState('table'); // table | checklist | menu | success
+  const [staff, setStaff] = useState(() => getSessionStaff());
+  const [step, setStep] = useState('table');
   const [tableNumber, setTableNumber] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
   const [note, setNote] = useState('');
@@ -80,6 +83,8 @@ export default function OrderPage() {
       allergy_checked: checks.allergyChecked,
       allergens: checks.allergens || [],
       tab_closed: false,
+      staff_name: staff?.name || null,
+      staff_colour: staff?.colour || null,
     });
     if (error) console.error('Order error:', error);
     setSending(false);
@@ -102,6 +107,17 @@ export default function OrderPage() {
       <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-zinc-700 border-t-amber-500 rounded-full animate-spin" />
       </div>
+    );
+  }
+
+  if (!staff) {
+    return (
+      <StaffSelector
+        role="waiter"
+        title="Who are you?"
+        subtitle="Select your name before taking orders"
+        onSelect={(s) => { setSessionStaff(s); setStaff(s); }}
+      />
     );
   }
 
@@ -150,17 +166,26 @@ export default function OrderPage() {
           <h2 className="font-heading text-xl text-amber-400 uppercase tracking-wider">
             Table {tableNumber}
           </h2>
-          <button
-            onClick={() => setShowCart(true)}
-            className="relative lg:hidden text-zinc-300 hover:text-amber-400 p-2"
-          >
-            <ShoppingCart className="w-6 h-6" />
-            {itemCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-6 h-6 bg-amber-500 text-black text-xs font-heading rounded-full flex items-center justify-center">
-                {itemCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setSessionStaff(null); setStaff(null); }}
+              className="px-3 py-1 rounded-lg font-body text-xs border border-zinc-700 text-zinc-400"
+              style={{ borderLeftColor: staff.colour, borderLeftWidth: '3px' }}
+            >
+              {staff.name}
+            </button>
+            <button
+              onClick={() => setShowCart(true)}
+              className="relative lg:hidden text-zinc-300 hover:text-amber-400 p-2"
+            >
+              <ShoppingCart className="w-6 h-6" />
+              {itemCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-6 h-6 bg-amber-500 text-black text-xs font-heading rounded-full flex items-center justify-center">
+                  {itemCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Category tabs */}
