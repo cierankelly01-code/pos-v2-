@@ -89,6 +89,7 @@ create table if not exists public.settings (
   venue_name text not null default 'Stratford Bar',
   table_count integer not null default 40 check (table_count between 1 and 99),
   admin_pin text not null default '1234',
+  setup_complete boolean not null default false,
   floor_map jsonb not null default '[]'::jsonb,
   menu_items jsonb not null default '[]'::jsonb
 );
@@ -295,9 +296,15 @@ insert into public.users (name, email, role, pin, active) values
 on conflict (email) do nothing;
 
 -- Default settings row (only if none exists)
-insert into public.settings (venue_name, table_count, admin_pin, floor_map, menu_items)
-select 'Stratford Bar', 40, '1234', '[]'::jsonb, '[]'::jsonb
+insert into public.settings (venue_name, table_count, admin_pin, setup_complete, floor_map, menu_items)
+select 'Stratford Bar', 40, '1234', false, '[]'::jsonb, '[]'::jsonb
 where not exists (select 1 from public.settings limit 1);
+
+-- Migration: add setup_complete to existing deployments
+alter table public.settings add column if not exists setup_complete boolean not null default false;
+update public.settings set setup_complete = true
+where venue_name is distinct from 'Stratford Bar'
+   or jsonb_array_length(menu_items) > 0;
 
 -- Sample products (optional starter menu — only if table is empty)
 insert into public.products (name, price, category, subcategory, sort_order)

@@ -2,6 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 import { isSchemaMissingError } from '@/components/DatabaseSetupNotice';
 
+const DEFAULT_SETTINGS = {
+  venue_name: 'Stratford Bar',
+  table_count: 40,
+  admin_pin: '1234',
+  setup_complete: false,
+  floor_map: [],
+  menu_items: [],
+};
+
 export function useSettings() {
   return useQuery({
     queryKey: ['settings'],
@@ -10,15 +19,37 @@ export function useSettings() {
         .from('settings')
         .select('*')
         .limit(1)
-        .single();
-      if (error && error.code === 'PGRST116') return null;
+        .maybeSingle();
+
       if (isSchemaMissingError(error)) {
         const err = new Error('DATABASE_NOT_SETUP');
         err.cause = error;
         throw err;
       }
       if (error) throw error;
-      return data;
+
+      if (!data) {
+        const { data: created, error: insertError } = await supabase
+          .from('settings')
+          .insert(DEFAULT_SETTINGS)
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        return created;
+      }
+
+      if (!data.admin_pin) {
+        const { data: updated, error: updateError } = await supabase
+          .from('settings')
+          .update({ admin_pin: '1234' })
+          .eq('id', data.id)
+          .select()
+          .single();
+        if (updateError) throw updateError;
+        return { ...updated, setup_complete: updated.setup_complete ?? false };
+      }
+
+      return { ...data, setup_complete: data.setup_complete ?? false };
     },
     staleTime: 30000,
   });

@@ -20,6 +20,7 @@ export default function FirstTimeSetup({ onComplete }) {
       admin_pin: pin,
       table_count: 40,
       menu_items: [],
+      setup_complete: true,
     });
     onComplete();
   };

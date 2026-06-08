@@ -68,9 +68,17 @@ export default function AdminPage() {
     return <DatabaseSetupNotice />;
   }
 
-  // First time — no settings record exists yet
-  if (!settings) {
-    return <FirstTimeSetup onComplete={() => {}} />;
+  // First-time setup — before PIN gate
+  if (!settings?.setup_complete) {
+    return (
+      <FirstTimeSetup
+        onComplete={() => {
+          sessionStorage.setItem(ADMIN_UNLOCK_KEY, '1');
+          setUnlocked(true);
+          queryClient.invalidateQueries({ queryKey: ['settings'] });
+        }}
+      />
+    );
   }
 
   if (!unlocked) {
