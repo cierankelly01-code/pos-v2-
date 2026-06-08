@@ -1,0 +1,97 @@
+{
+  "name": "Settings",
+  "type": "object",
+  "properties": {
+    "venue_name": {
+      "type": "string",
+      "default": "Stratford Bar",
+      "description": "Name of the venue"
+    },
+    "table_count": {
+      "type": "integer",
+      "default": 40,
+      "description": "Number of tables"
+    },
+    "admin_pin": {
+      "type": "string",
+      "default": "1234",
+      "description": "Admin PIN for access"
+    },
+    "floor_map": {
+      "type": "array",
+      "description": "Visual floor map sections with tables",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "seats": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "menu_items": {
+      "type": "array",
+      "description": "All menu items",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "drinks",
+              "food"
+            ]
+          },
+          "subcategory": {
+            "type": "string",
+            "description": "Drink subcategory e.g. Beer, Wine, Spirits",
+            "enum": [
+              "Beer",
+              "Wine",
+              "Spirits",
+              "Cocktails",
+              "Soft Drinks",
+              "Hot Drinks",
+              "Other"
+            ]
+          },
+          "allergens": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "venue_name",
+    "table_count",
+    "admin_pin",
+    "menu_items"
+  ]
+}

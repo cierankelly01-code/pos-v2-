@@ -1,0 +1,86 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "table_number": {
+      "type": "integer",
+      "description": "Table number for the order"
+    },
+    "items": {
+      "type": "array",
+      "description": "List of ordered items",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "quantity": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "note": {
+      "type": "string",
+      "description": "Optional order note"
+    },
+    "total": {
+      "type": "number",
+      "description": "Order total in GBP"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "complete"
+      ],
+      "default": "pending",
+      "description": "Bar order status \u2014 pending = needs making, complete = made by bar"
+    },
+    "tab_closed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the waiter has closed the table tab and taken payment"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the bar completed the order"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "cash",
+        "card"
+      ],
+      "description": "How the table paid when the waiter closed the tab"
+    },
+    "id_checked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether staff confirmed ID was checked before taking the order"
+    },
+    "allergy_checked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether staff confirmed allergies were asked about before taking the order"
+    },
+    "allergens": {
+      "type": "array",
+      "description": "List of allergens the customer has declared",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "table_number",
+    "items",
+    "total",
+    "status"
+  ]
+}

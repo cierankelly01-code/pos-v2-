@@ -1,0 +1,206 @@
+import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSettings, useUpdateSettings } from '@/lib/useSettings';
+import MenuEditor from '@/components/admin/MenuEditor';
+import OrdersOverview from '@/components/admin/OrdersOverview';
+import FirstTimeSetup from '@/components/admin/FirstTimeSetup';
+import AppSettings from '@/components/admin/AppSettings';
+import FloorMapEditor from '@/components/admin/FloorMapEditor';
+import MarketingList from '@/components/admin/MarketingList';
+import { startOfToday, startOfWeek } from 'date-fns';
+import { toast } from 'sonner';
+import NavMenu from '@/components/NavMenu';
+
+export default function AdminPage() {
+  const { data: settings, isLoading: settingsLoading } = useSettings();
+  const updateSettings = useUpdateSettings();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('menu');
+  const [tableCount, setTableCount] = useState(null);
+
+  const todayStr = useMemo(() => startOfToday().toISOString(), []);
+  const weekStr = useMemo(() => startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(), []);
+
+  const { data: allOrders = [], refetch } = useQuery({
+    queryKey: ['admin-orders'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 10000,
+  });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        refetch();
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [refetch]);
+
+  const todayOrders = useMemo(() => allOrders.filter(o => new Date(o.created_at) >= new Date(todayStr)), [allOrders, todayStr]);
+  const weekOrders = useMemo(() => allOrders.filter(o => new Date(o.created_at) >= new Date(weekStr)), [allOrders, weekStr]);
+
+  if (settingsLoading) {
+    return (
+      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-zinc-700 border-t-amber-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // First time — no settings record exists yet
+  if (!settings) {
+    return <FirstTimeSetup onComplete={() => {}} />;
+  }
+
+
+
+  const saveMenu = async (items) => {
+    await updateSettings.mutateAsync({ menu_items: items });
+    toast.success('Menu saved');
+  };
+
+  const saveTableCount = async () => {
+    const count = parseInt(tableCount ?? settings?.table_count);
+    if (count < 1 || count > 99) return;
+    await updateSettings.mutateAsync({ table_count: count });
+    toast.success('Table count updated');
+  };
+
+  const clearQueue = async () => {
+    const pending = allOrders.filter(o => o.status === 'pending');
+    for (const o of pending) {
+      await supabase.from('orders').delete().eq('id', o.id);
+    }
+    queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    toast.success(`Cleared ${pending.length} pending orders`);
+  };
+
+  const wipeAllOrders = async () => {
+    if (!window.confirm('Wipe ALL orders? This cannot be undone.')) return;
+    for (const o of allOrders) {
+      await supabase.from('orders').delete().eq('id', o.id);
+    }
+    queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    toast.success(`Wiped ${allOrders.length} orders`);
+  };
+
+  const saveFloorMap = async (floorMap) => {
+    await updateSettings.mutateAsync({ floor_map: floorMap });
+  };
+
+  const tabs = [
+    { key: 'menu', label: 'Menu' },
+    { key: 'tables', label: 'Tables' },
+    { key: 'floormap', label: 'Floor Map' },
+    { key: 'orders', label: 'Orders' },
+    { key: 'marketing', label: 'Marketing' },
+    { key: 'settings', label: 'Settings' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#1a1a1a] text-zinc-100">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-[#1a1a1a] border-b border-zinc-800">
+        <div className="max-w-2xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-3 mb-3">
+            <NavMenu />
+            <h1 className="font-heading text-2xl text-amber-400 uppercase tracking-wider">
+              Admin Panel
+            </h1>
+          </div>
+          <div className="flex gap-1">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-1 py-3 rounded-lg font-heading text-base uppercase tracking-wider transition-colors
+                  ${activeTab === tab.key
+                    ? 'bg-amber-500 text-black'
+                    : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {activeTab === 'menu' && (
+          <MenuEditor menuItems={settings?.menu_items || []} onSave={saveMenu} />
+        )}
+
+        {activeTab === 'tables' && (
+          <div className="space-y-6">
+            <div>
+              <label className="font-body text-sm text-zinc-400 uppercase tracking-wider block mb-2">
+                Number of Tables
+              </label>
+              <div className="flex gap-3">
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  value={tableCount ?? settings?.table_count ?? 40}
+                  onChange={e => setTableCount(e.target.value)}
+                  className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 font-heading text-2xl rounded-lg px-4 py-3 focus:outline-none focus:border-amber-500/50"
+                />
+                <button
+                  onClick={saveTableCount}
+                  className="min-h-[56px] px-8 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-heading text-base uppercase tracking-wider transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-zinc-800">
+              <h3 className="font-heading text-lg text-red-400 uppercase tracking-wider mb-3">Danger Zone</h3>
+              <div className="space-y-3">
+                <button
+                  onClick={clearQueue}
+                  className="w-full min-h-[56px] rounded-lg bg-red-900/30 hover:bg-red-900/50 border border-red-700/30 text-red-400 font-heading text-base uppercase tracking-wider transition-colors"
+                >
+                  Clear All Pending Orders
+                </button>
+                <button
+                  onClick={wipeAllOrders}
+                  className="w-full min-h-[56px] rounded-lg bg-red-900/50 hover:bg-red-900/70 border border-red-600/50 text-red-300 font-heading text-base uppercase tracking-wider transition-colors"
+                >
+                  ⚠ Wipe ALL Orders (Testing)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'floormap' && (
+          <FloorMapEditor settings={settings} onSave={saveFloorMap} />
+        )}
+
+        {activeTab === 'orders' && (
+          <OrdersOverview todayOrders={todayOrders} weekOrders={weekOrders} />
+        )}
+
+        {activeTab === 'marketing' && (
+          <MarketingList />
+        )}
+
+        {activeTab === 'settings' && (
+          <AppSettings settings={settings} />
+        )}
+      </div>
+    </div>
+  );
+}
