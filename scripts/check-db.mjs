@@ -37,7 +37,7 @@ if (!url || !key) {
 }
 
 const supabase = createClient(url, key);
-const tables = ['settings', 'orders', 'bookings'];
+const tables = ['settings', 'orders', 'bookings', 'users', 'products', 'allergens'];
 let ok = true;
 
 for (const table of tables) {

@@ -20,9 +20,16 @@ export default function DatabaseSetupNotice() {
           <code className="text-amber-300">supabase/schema.sql</code>, then refresh this page.
         </p>
         <p className="font-body text-sm text-zinc-500">
-          Required tables: <span className="text-zinc-300">settings</span>,{' '}
+          Required tables:{' '}
+          <span className="text-zinc-300">settings</span>,{' '}
           <span className="text-zinc-300">orders</span>,{' '}
-          <span className="text-zinc-300">bookings</span>
+          <span className="text-zinc-300">bookings</span>,{' '}
+          <span className="text-zinc-300">users</span>,{' '}
+          <span className="text-zinc-300">products</span>,{' '}
+          <span className="text-zinc-300">allergens</span>
+        </p>
+        <p className="font-body text-xs text-zinc-600">
+          See <code className="text-zinc-400">supabase/SETUP.md</code> for step-by-step instructions.
         </p>
       </div>
     </div>
